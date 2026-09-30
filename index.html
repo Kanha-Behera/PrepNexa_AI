@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PrepNexa AI Interview Score</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 760px;
+        margin: 40px auto;
+        background: #f4f7fb;
+        color: #1f2937;
+        padding: 24px;
+      }
+      .card {
+        background: rgb(247, 247, 248);
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      }
+      label {
+        display: block;
+        margin-top: 16px;
+        font-weight: bold;
+      }
+      textarea, input {
+        width: 100%;
+        margin-top: 8px;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        box-sizing: border-box;
+      }
+      .button-row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 20px;
+      }
+      button {
+        margin-top: 0;
+        background: #2563eb;
+        color: white;
+        border: none;
+        padding: 12px 18px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button.secondary {
+        background: #0f766e;
+      }
+      button.mic {
+        background: #dc2626;
+      }
+      #result {
+        margin-top: 20px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 8px;
+        padding: 16px;
+        display: none;
+      }
+      .score {
+        font-size: 2rem;
+        font-weight: bold;
+      }
+      .status {
+        margin-top: 10px;
+        font-size: 0.95rem;
+        color: #475569;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>PrepNexa AI Interview Score</h1>
+      <form id="score-form">
+        <label for="question">Interview question</label>
+        <textarea id="question" rows="4" placeholder="How do you handle missing values in a dataset?"></textarea>
+
+        <label for="answer">Candidate answer</label>
+        <textarea id="answer" rows="6" placeholder="I would use imputation and check the missingness pattern before modeling."></textarea>
+
+        <div class="button-row">
+          <button type="button" class="mic" id="answer-mic">🎙 Use microphone</button>
+          <button type="button" class="secondary" id="speak-score">🔊 Read score</button>
+          <button type="submit">Score answer</button>
+        </div>
+        <div class="status" id="status">Voice is available in supported browsers.</div>
+      </form>
+
+      <div id="result">
+        <div>Predicted interview score</div>
+        <div class="score" id="score">0.00</div>
+        <pre id="features"></pre>
+      </div>
+    </div>
+
+    <script>
+      const form = document.getElementById('score-form');
+      const result = document.getElementById('result');
+      const scoreEl = document.getElementById('score');
+      const featuresEl = document.getElementById('features');
+      const statusEl = document.getElementById('status');
+      const answerField = document.getElementById('answer');
+      const questionField = document.getElementById('question');
+      const voiceButton = document.getElementById('answer-mic');
+      const readScoreButton = document.getElementById('speak-score');
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      let recognition = null;
+      let voiceTarget = answerField;
+
+      function setStatus(message) {
+        statusEl.textContent = message;
+      }
+
+      function speakText(text) {
+        if (!('speechSynthesis' in window)) {
+          setStatus('Speech output is not supported in this browser.');
+          return;
+        }
+        const utterance = new SpeechSynthesisUtterance(text);
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+      }
+
+      function startVoiceCapture(targetElement) {
+        if (!SpeechRecognition) {
+          setStatus('Voice input is not supported in this browser. Use Chrome or Edge and allow microphone access.');
+          return;
+        }
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setStatus('Microphone access is blocked by this browser. Please use a modern browser with mic permission enabled.');
+          return;
+        }
+
+        navigator.mediaDevices.getUserMedia({ audio: true })
+          .then(() => {
+            if (!recognition) {
+              recognition = new SpeechRecognition();
+              recognition.lang = 'en-US';
+              recognition.interimResults = false;
+              recognition.maxAlternatives = 1;
+
+              recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                targetElement.value = transcript;
+                setStatus('Voice captured successfully.');
+              };
+
+              recognition.onerror = (event) => {
+                if (event.error === 'not-allowed') {
+                  setStatus('Microphone permission was blocked. Please click the mic button again and allow access.');
+                } else if (event.error === 'no-speech') {
+                  setStatus('No speech was detected. Try speaking more clearly or type your answer instead.');
+                } else {
+                  setStatus('Voice capture failed. Please try again or type the answer manually.');
+                }
+              };
+
+              recognition.onend = () => {
+                voiceButton.textContent = '🎙 Use microphone';
+              };
+            }
+
+            voiceButton.textContent = '🎙 Listening...';
+            setStatus('Listening for your answer...');
+            voiceTarget = targetElement;
+
+            try {
+              recognition.start();
+            } catch (error) {
+              setStatus('Microphone is already in use. Please try again in a moment.');
+            }
+          })
+          .catch(() => {
+            setStatus('Microphone permission was denied. Please allow access and try again.');
+          });
+      }
+
+      voiceButton.addEventListener('click', () => startVoiceCapture(answerField));
+
+      readScoreButton.addEventListener('click', () => {
+        const score = scoreEl.textContent.trim();
+        if (score && score !== '0.00') {
+          speakText(`The predicted interview score is ${score} out of 10.`);
+          setStatus('Reading the score aloud.');
+        } else {
+          setStatus('Please score an answer first before reading the result.');
+        }
+      });
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const payload = {
+          question: questionField.value,
+          answer: answerField.value,
+        };
+
+        setStatus('Scoring your answer...');
+
+        const response = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+        scoreEl.textContent = data.score.toFixed(2);
+        featuresEl.textContent = JSON.stringify(data.features, null, 2);
+        result.style.display = 'block';
+        setStatus('Answer scored successfully.');
+      });
+    </script>
+  </body>
+</html>
